@@ -1,184 +1,295 @@
-import React, { useEffect, useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, View, Text, TouchableOpacity, Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { SafeAreaView, ScrollView, StyleSheet, View, Text, TouchableOpacity, Alert, ImageBackground } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { auth } from '../firebase';
 import { getFirestore, doc, getDoc } from "firebase/firestore";
 import { signOut } from 'firebase/auth';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const db = getFirestore();
-
-const Sections = [];
 
 const ProfileScreen = () => {
     const navigation = useNavigation();
     const [firstName, setFirstName] = useState('');
-    const [role,setRole]=useState('');
-    const [email,setEmail]=useState('');
-    const [phoneNumber,setNumber]=useState('');
+    const [role, setRole] = useState('');
+    const [email, setEmail] = useState('');
+    const [phoneNumber, setNumber] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
+
+    const fetchUserDetails = useCallback(async () => {
+        if (auth.currentUser) {
+            setIsLoading(true);
+            try {
+                const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    setFirstName(userData.firstName);
+                    setEmail(userData.email);
+                    setRole(userData.role);
+                    setNumber(userData.phoneNumber);
+                } else {
+                    console.log("No such document!");
+                }
+            } catch (error) {
+                console.error("Error fetching user details:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        } else {
+            console.log("No user is currently logged in.");
+            setIsLoading(false);
+            // Clear user data when no user is logged in
+            setFirstName('');
+            setEmail('');
+            setRole('');
+            setNumber('');
+        }
+    }, []);
 
     useEffect(() => {
-        const fetchUserDetails = async () => {
-            const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
-            if (userDoc.exists()) {
-                setFirstName(userDoc.data().firstName);
-                setEmail(userDoc.data().email);
-                setRole(userDoc.data().role);
-                setNumber(userDoc.data().phoneNumber)
-            } else {
-                console.log("No such document!");
-            }
-        };
-
         fetchUserDetails();
-    }, []);
+    }, [fetchUserDetails]);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchUserDetails();
+            return () => {
+                setIsLoading(true);
+            };
+        }, [fetchUserDetails])
+    );
+
     const handleSignout = () => {
-        signOut(auth)
-          .then(() => {
-            Alert.alert('Logout Successful');
-            console.log('Successful logout')
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Home' }],
-            });
-          })
-          .catch((error) => {
-            Alert.alert('Logout Failed', error.message);
-            console.error('Sign out error', error);
-          });
-      };
+        if (auth.currentUser) {
+            signOut(auth)
+                .then(() => {
+                    Alert.alert('Logout Successful');
+                    console.log('Successful logout');
+                    // Clear user data immediately after logout
+                    setFirstName('');
+                    setEmail('');
+                    setRole('');
+                    setNumber('');
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'Welcome' }],
+                    });
+                })
+                .catch((error) => {
+                    Alert.alert('Logout Failed', error.message);
+                    console.error('Sign out error', error);
+                });
+        } else {
+            Alert.alert('No user is currently logged in.');
+        }
+    };
 
     const gotoEdit = () => {
-        navigation.navigate('Edit Profile')
-    }
-    const gotoTasks=()=>{
-        navigation.navigate('Task Screen')
-      }
-      const gotoUnits=()=>{
-        navigation.navigate('Unit Screen')
-      }
+        navigation.navigate('Edit Profile');
+    };
 
+    const gotoTasks = () => {
+        navigation.navigate('Task Screen');
+    };
+
+    const gotoUnits = () => {
+        navigation.navigate('Units');
+    };
+
+    const ProfileButton = ({ icon, title, onPress, color }) => (
+        <TouchableOpacity style={[styles.profileButton, { backgroundColor: color }]} onPress={onPress}>
+            <Icon name={icon} size={24} color="#fff" />
+            <Text style={styles.buttonText}>{title}</Text>
+        </TouchableOpacity>
+    );
+
+    const renderGhostProfile = () => (
+        <View style={styles.content}>
+            <View style={styles.ghostHeaderBackground}>
+                <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.8)']}
+                    style={styles.gradient}
+                >
+                    <View style={styles.headerContent}>
+                        <View style={styles.ghostWelcomeTxt} />
+                        <View style={styles.ghostRoleTxt} />
+                    </View>
+                </LinearGradient>
+            </View>
+            <View style={styles.infoContainer}>
+                <View style={styles.infoItem}>
+                    <View style={styles.ghostIcon} />
+                    <View style={styles.ghostInfoText} />
+                </View>
+                <View style={styles.infoItem}>
+                    <View style={styles.ghostIcon} />
+                    <View style={styles.ghostInfoText} />
+                </View>
+            </View>
+            <View style={styles.profileNavigation}>
+                {[1, 2, 3, 4].map((_, index) => (
+                    <View key={index} style={[styles.profileButton, styles.ghostProfileButton]} />
+                ))}
+            </View>
+        </View>
+    );
 
     return (
-        <SafeAreaView style={{ flex: 1 }}>
-            <ScrollView style={styles.container}>
-                <View style={styles.profile}>
-                    <Text>Hello, {firstName}</Text>
-                    {/* <Text style={styles.profileSecond}></Text> */}
-                    <Text style={styles.profileSecond}>Email: {email}</Text>
-                    <Text style={styles.profileSecond}>Role: {role}</Text>
-                    <Text style={styles.profileSecond}>Number: {phoneNumber}</Text>
-                    
-                </View>
-                <View style={styles.profileNaviagtion}>
-                    <TouchableOpacity style={styles.taskBtn} onPress={gotoTasks}><Text style={styles.taskTxt}>View tasks</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.unitBtn} onPress={gotoUnits}><Text style={styles.unitTxt}>View units</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.editBtn} onPress={gotoEdit}><Text style={styles.editTxt}>Edit Profile</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.logoutBtn} onPress={handleSignout}><Text style={styles.logoutTxt} >Logout</Text></TouchableOpacity>
-                </View>
+        <SafeAreaView style={styles.container}>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+                {isLoading ? renderGhostProfile() : (
+                    <View style={styles.content}>
+                        <ImageBackground
+                            source={require('../images/full_logo.png')}
+                            style={styles.headerBackground}
+                        >
+                            <LinearGradient
+                                colors={['transparent', 'rgba(0,0,0,0.8)']}
+                                style={styles.gradient}
+                            >
+                                <View style={styles.headerContent}>
+                                    <Text style={styles.welcomeTxt}>Hello, {firstName}</Text>
+                                    <Text style={styles.roleTxt}>{role}</Text>
+                                </View>
+                            </LinearGradient>
+                        </ImageBackground>
+                        <View style={styles.infoContainer}>
+                            <View style={styles.infoItem}>
+                                <Icon name="email" size={24} color="#007BFF" />
+                                <Text style={styles.infoText}>{email}</Text>
+                            </View>
+                            <View style={styles.infoItem}>
+                                <Icon name="phone" size={24} color="#28A745" />
+                                <Text style={styles.infoText}>{phoneNumber}</Text>
+                            </View>
+                        </View>
+                        <View style={styles.profileNavigation}>
+                            <ProfileButton icon="assignment" title="View Tasks" onPress={gotoTasks} color="#007BFF" />
+                            <ProfileButton icon="school" title="View Units" onPress={gotoUnits} color="#28A745" />
+                            <ProfileButton icon="edit" title="Edit Profile" onPress={gotoEdit} color="#FFC107" />
+                            <ProfileButton icon="exit-to-app" title="Logout" onPress={handleSignout} color="#DC3545" />
+                        </View>
+                    </View>
+                )}
             </ScrollView>
         </SafeAreaView>
     );
 };
+
 const styles = StyleSheet.create({
     container: {
-        paddingVertical: 24,
+        flex: 1,
+        backgroundColor: '#f0f0f0',
     },
-    profile: {
-        padding: 24,
-        alignItems: 'center',
-        justifyContent: 'center'
+    scrollContent: {
+        flexGrow: 1,
     },
-    profileName: {
-        marginTop: 20,
-        fontSize: 19,
-        fontWeight: '600',
-        color: '#414d63',
-        textAlign: 'center'
+    content: {
+        flex: 1,
     },
-    profileSecond: {
-        marginTop: 5,
-        fontSize: 16,
-        color: '#989898',
-        textAlign: 'center'
-
+    headerBackground: {
+        height: 250,
+        justifyContent: 'flex-end',
     },
-    profileNaviagtion: {
-        padding: 24,
-        alignItems: 'center',
-        justifyContent: 'center'
+    gradient: {
+        flex: 1,
+        justifyContent: 'flex-end',
     },
-    taskBtn: {
-        backgroundColor: 'grey',
-        width: '100%',
-        borderRadius: 2,
-        marginTop: 20,
-        height: 50,
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    unitBtn: {
-        backgroundColor: 'grey',
-        width: '100%',
-        borderRadius: 2,
-        marginTop: 20,
-        height: 50,
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    editBtn: {
-        backgroundColor: 'grey',
-        width: '100%',
-        borderRadius: 2,
-        marginTop: 20,
-        height: 50,
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    resetBtn: {
-        backgroundColor: 'grey',
-        width: '100%',
-        borderRadius: 2,
-        marginTop: 20,
-        height: 50,
-        alignItems: 'center',
-        justifyContent: 'center'
+    headerContent: {
+        padding: 20,
     },
     welcomeTxt: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#fff',
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10,
+    },
+    roleTxt: {
         fontSize: 20,
-        fontWeight: '600',
-        color: '#414d63',
-        textAlign: 'center'
+        color: '#fff',
+        marginTop: 5,
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10,
     },
-    taskTxt: {
-        fontSize: 20,
-        color:'#2EE49B'
-    },
-    unitTxt: {
-        fontSize: 20,
-        color:'#2EE49B'
-    },
-    editTxt: {
-        fontSize: 20,
-        color:'#2EE49B'
-    },
-    logoutTxt: {
-        fontSize: 20,
-    },
-    resetTxt: {
-        fontSize: 20
-    },
-    logoutBtn: {
-        width: 300,
-        padding: 10,
-        backgroundColor: 'red',
+    infoContainer: {
+        backgroundColor: '#fff',
         borderRadius: 15,
-        alignItems: 'center',
-        marginTop: 10,
-        bottom: -100,
+        margin: 20,
+        padding: 20,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
-    logoutBtnText: {
-        color: 'white',
-        fontSize: 20,
+    infoItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    infoText: {
+        marginLeft: 15,
+        fontSize: 16,
+        color: '#333',
+    },
+    profileNavigation: {
+        padding: 20,
+    },
+    profileButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 15,
+        borderRadius: 10,
+        marginBottom: 15,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    buttonText: {
+        marginLeft: 15,
+        fontSize: 18,
+        color: '#fff',
+        fontWeight: '600',
+    },
+    ghostHeaderBackground: {
+        height: 250,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    ghostWelcomeTxt: {
+        width: '70%',
+        height: 32,
+        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+        borderRadius: 4,
+        marginBottom: 10,
+    },
+    ghostRoleTxt: {
+        width: '50%',
+        height: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+        borderRadius: 4,
+    },
+    ghostIcon: {
+        width: 24,
+        height: 24,
+        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+        borderRadius: 12,
+    },
+    ghostInfoText: {
+        width: '70%',
+        height: 16,
+        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+        borderRadius: 4,
+        marginLeft: 15,
+    },
+    ghostProfileButton: {
+        backgroundColor: 'rgba(0, 0, 0, 0.1)',
     },
 });
+
 export default ProfileScreen;
